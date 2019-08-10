@@ -12,21 +12,52 @@ type DataType a
     | RecordData (List ( String, DataType a ))
 
 
+dataTypeToString dataType =
+    case dataType of
+        IntData value ->
+            String.fromInt value
+
+        FloatData value ->
+            String.fromFloat value
+
+        StringData value ->
+            value
+
+        TupleData value ->
+            String.join "," (List.map dataTypeToString value)
+
+        ListData value ->
+            String.join "," (List.map dataTypeToString value)
+
+        RecordData value ->
+            "Record not implemented"
+
+
 type Comparison a
-    = IntSame Int
+    = Error String
+    | Plus (DataType a)
+    | Minus (DataType a)
+    | IntSame Int
     | IntDiff { expected : Int, actual : Int }
     | FloatSame Float
     | FloatDiff { expected : Float, actual : Float }
     | StringSame String
     | StringDiff { expected : String, actual : String }
-    | TupleSame (List (Comparison a))
+    | TupleSame (List (DataType a))
     | TupleDiff (List (Comparison a))
-    | Error String
+    | ListSame (List (DataType a))
+    | ListDiff (List (Comparison a))
 
 
 isDiff : Comparison a -> Bool
 isDiff comp =
     case comp of
+        Plus _ ->
+            True
+
+        Minus _ ->
+            True
+
         IntSame _ ->
             False
 
@@ -51,6 +82,12 @@ isDiff comp =
         TupleDiff _ ->
             True
 
+        ListSame _ ->
+            False
+
+        ListDiff _ ->
+            True
+
         Error _ ->
             True
 
@@ -60,6 +97,12 @@ diffToString diff_ =
     case diff_ of
         Error string ->
             "Error: " ++ string
+
+        Plus value ->
+            "+" ++ dataTypeToString value
+
+        Minus value ->
+            "-" ++ dataTypeToString value
 
         IntSame value ->
             String.fromInt value
@@ -80,9 +123,15 @@ diffToString diff_ =
             "-\"" ++ expected ++ "\"\n+\"" ++ actual ++ "\""
 
         TupleSame diffs ->
-            String.join "\n" (List.map diffToString diffs)
+            String.join "\n" (List.map dataTypeToString diffs)
 
         TupleDiff diffs ->
+            String.join "\n" (List.map diffToString diffs)
+
+        ListSame diffs ->
+            String.join "\n" (List.map dataTypeToString diffs)
+
+        ListDiff diffs ->
             String.join "\n" (List.map diffToString diffs)
 
 
@@ -111,39 +160,86 @@ diff expected actual =
                 StringSame e
 
         ( TupleData e, TupleData a ) ->
-            let
-                eLength =
-                    List.length e
-            in
-            if eLength /= List.length a then
-                Error "Tuples of different length"
+            diffTuples e a
 
-            else if eLength < 2 || eLength > 4 then
-                Error "Tuples must have 2 to 4 elements"
-
-            else
-                let
-                    elements =
-                        List.map2 diff e a
-                in
-                if List.any isDiff elements then
-                    TupleDiff elements
-
-                else
-                    TupleSame elements
+        ( ListData e, ListData a ) ->
+            diffLists e a
 
         _ ->
             Error "Comparing different data types"
+
+
+longZip : (Maybe a -> Maybe b -> c) -> List a -> List b -> List c
+longZip fn listA listB =
+    longZipHelper fn listA listB []
+        |> List.reverse
+
+
+longZipHelper fn listA listB acc =
+    case ( listA, listB ) of
+        ( [], [] ) ->
+            acc
+
+        ( a :: aRest, [] ) ->
+            longZipHelper fn aRest [] (fn (Just a) Nothing :: acc)
+
+        ( [], b :: bRest ) ->
+            longZipHelper fn [] bRest (fn Nothing (Just b) :: acc)
+
+        ( a :: aRest, b :: bRest ) ->
+            longZipHelper fn aRest bRest (fn (Just a) (Just b) :: acc)
+
+
+diffLists e a =
+    if e /= a then
+        ListDiff <| longZip diffMaybe e a
+
+    else
+        ListSame e
+
+
+diffMaybe e a =
+    case ( e, a ) of
+        ( Nothing, Nothing ) ->
+            Error "Two nothings in list comparison"
+
+        ( Just eV, Nothing ) ->
+            Minus eV
+
+        ( Nothing, Just aV ) ->
+            Plus aV
+
+        ( Just eV, Just aV ) ->
+            diff eV aV
+
+
+diffTuples : List (DataType a) -> List (DataType a) -> Comparison a
+diffTuples e a =
+    let
+        eLength =
+            List.length e
+    in
+    if eLength /= List.length a then
+        Error "Tuples of different length"
+
+    else if eLength < 2 || eLength > 4 then
+        Error "Tuples must have 2 to 4 elements"
+
+    else if e /= a then
+        TupleDiff <| List.map2 diff e a
+
+    else
+        TupleSame e
 
 
 main : Html msg
 main =
     let
         a =
-            TupleData [ IntData 1, IntData 2 ]
+            ListData [ IntData 1, IntData 2, IntData 5 ]
 
         b =
-            TupleData [ IntData 3, IntData 2 ]
+            ListData [ IntData 3, IntData 2 ]
     in
     div []
         [ text "Result: "
