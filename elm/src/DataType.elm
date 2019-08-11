@@ -24,13 +24,18 @@ dataTypeToString dataType =
             value
 
         TupleData value ->
-            String.join "," (List.map dataTypeToString value)
+            "(" ++ String.join "," (List.map dataTypeToString value) ++ ")"
 
         ListData value ->
-            String.join "," (List.map dataTypeToString value)
+            "[" ++ String.join "," (List.map dataTypeToString value) ++ "]"
 
-        RecordData value ->
-            "Record not implemented"
+        RecordData list ->
+            "Record [" ++ String.join "," (List.map fieldDataTypeToString list) ++ "]"
+
+
+fieldDataTypeToString : ( String, DataType a ) -> String
+fieldDataTypeToString ( name, data ) =
+    name ++ ": " ++ dataTypeToString data
 
 
 type Comparison a
@@ -43,6 +48,7 @@ type Comparison a
     | StringDiff { expected : String, actual : String }
     | TupleDiff (List (Comparison a))
     | ListDiff (List (Comparison a))
+    | RecordDiff (List ( String, Comparison a ))
 
 
 isDiff : Comparison a -> Bool
@@ -85,6 +91,14 @@ diffToString diff_ =
         ListDiff diffs ->
             String.join "\n" (List.map diffToString diffs)
 
+        RecordDiff list ->
+            String.join "\n" (List.map fieldDiffToString list)
+
+
+fieldDiffToString : ( String, Comparison a ) -> String
+fieldDiffToString ( name, diff_ ) =
+    name ++ ": " ++ diffToString diff_
+
 
 diff : DataType a -> DataType a -> Comparison a
 diff expected actual =
@@ -107,6 +121,9 @@ diff expected actual =
 
             ( ListData e, ListData a ) ->
                 diffLists e a
+
+            ( RecordData e, RecordData a ) ->
+                diffRecords e a
 
             _ ->
                 Error "Comparing different data types"
@@ -168,21 +185,32 @@ diffTuples e a =
     else if eLength < 2 || eLength > 4 then
         Error "Tuples must have 2 to 4 elements"
 
-    else if e /= a then
+    else
         TupleDiff <| List.map2 diff e a
 
+
+diffRecords : List ( String, DataType a ) -> List ( String, DataType a ) -> Comparison a
+diffRecords e a =
+    if List.map Tuple.first e /= List.map Tuple.first a then
+        Error "Records have diffing number or order of fields"
+
     else
-        Same <| TupleData e
+        RecordDiff <| List.map2 diffField e a
+
+
+diffField : ( String, DataType a ) -> ( String, DataType a ) -> ( String, Comparison a )
+diffField ( eName, e ) ( _, a ) =
+    ( eName, diff e a )
 
 
 main : Html msg
 main =
     let
         a =
-            ListData [ IntData 1, IntData 2, IntData 5 ]
+            RecordData [ ( "name", IntData 1 ), ( "other", FloatData 2.0 ) ]
 
         b =
-            ListData [ IntData 3, IntData 2 ]
+            RecordData [ ( "name", IntData 1 ), ( "other", FloatData 2.5 ) ]
     in
     div []
         [ text "Result: "
