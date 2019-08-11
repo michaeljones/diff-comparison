@@ -37,58 +37,21 @@ type Comparison a
     = Error String
     | Plus (DataType a)
     | Minus (DataType a)
-    | IntSame Int
+    | Same (DataType a)
     | IntDiff { expected : Int, actual : Int }
-    | FloatSame Float
     | FloatDiff { expected : Float, actual : Float }
-    | StringSame String
     | StringDiff { expected : String, actual : String }
-    | TupleSame (List (DataType a))
     | TupleDiff (List (Comparison a))
-    | ListSame (List (DataType a))
     | ListDiff (List (Comparison a))
 
 
 isDiff : Comparison a -> Bool
 isDiff comp =
     case comp of
-        Plus _ ->
-            True
-
-        Minus _ ->
-            True
-
-        IntSame _ ->
+        Same _ ->
             False
 
-        IntDiff _ ->
-            True
-
-        FloatSame _ ->
-            False
-
-        FloatDiff _ ->
-            True
-
-        StringSame _ ->
-            False
-
-        StringDiff _ ->
-            True
-
-        TupleSame _ ->
-            False
-
-        TupleDiff _ ->
-            True
-
-        ListSame _ ->
-            False
-
-        ListDiff _ ->
-            True
-
-        Error _ ->
+        _ ->
             True
 
 
@@ -98,38 +61,26 @@ diffToString diff_ =
         Error string ->
             "Error: " ++ string
 
+        Same value ->
+            dataTypeToString value
+
         Plus value ->
             "+" ++ dataTypeToString value
 
         Minus value ->
             "-" ++ dataTypeToString value
 
-        IntSame value ->
-            String.fromInt value
-
         IntDiff { expected, actual } ->
             "-" ++ String.fromInt expected ++ "\n+" ++ String.fromInt actual
-
-        FloatSame value ->
-            String.fromFloat value
 
         FloatDiff { expected, actual } ->
             "-" ++ String.fromFloat expected ++ "\n+" ++ String.fromFloat actual
 
-        StringSame value ->
-            "\"" ++ value ++ "\""
-
         StringDiff { expected, actual } ->
             "-\"" ++ expected ++ "\"\n+\"" ++ actual ++ "\""
 
-        TupleSame diffs ->
-            String.join "\n" (List.map dataTypeToString diffs)
-
         TupleDiff diffs ->
             String.join "\n" (List.map diffToString diffs)
-
-        ListSame diffs ->
-            String.join "\n" (List.map dataTypeToString diffs)
 
         ListDiff diffs ->
             String.join "\n" (List.map diffToString diffs)
@@ -137,36 +88,28 @@ diffToString diff_ =
 
 diff : DataType a -> DataType a -> Comparison a
 diff expected actual =
-    case ( expected, actual ) of
-        ( IntData e, IntData a ) ->
-            if e /= a then
+    if expected == actual then
+        Same expected
+
+    else
+        case ( expected, actual ) of
+            ( IntData e, IntData a ) ->
                 IntDiff { expected = e, actual = a }
 
-            else
-                IntSame e
-
-        ( FloatData e, FloatData a ) ->
-            if e /= a then
+            ( FloatData e, FloatData a ) ->
                 FloatDiff { expected = e, actual = a }
 
-            else
-                FloatSame e
-
-        ( StringData e, StringData a ) ->
-            if e /= a then
+            ( StringData e, StringData a ) ->
                 StringDiff { expected = e, actual = a }
 
-            else
-                StringSame e
+            ( TupleData e, TupleData a ) ->
+                diffTuples e a
 
-        ( TupleData e, TupleData a ) ->
-            diffTuples e a
+            ( ListData e, ListData a ) ->
+                diffLists e a
 
-        ( ListData e, ListData a ) ->
-            diffLists e a
-
-        _ ->
-            Error "Comparing different data types"
+            _ ->
+                Error "Comparing different data types"
 
 
 longZip : (Maybe a -> Maybe b -> c) -> List a -> List b -> List c
@@ -195,7 +138,7 @@ diffLists e a =
         ListDiff <| longZip diffMaybe e a
 
     else
-        ListSame e
+        Same <| ListData e
 
 
 diffMaybe e a =
@@ -229,7 +172,7 @@ diffTuples e a =
         TupleDiff <| List.map2 diff e a
 
     else
-        TupleSame e
+        Same <| TupleData e
 
 
 main : Html msg
