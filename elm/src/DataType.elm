@@ -10,6 +10,7 @@ type DataType a
     | TupleData (List (DataType a))
     | ListData (List (DataType a))
     | RecordData (List ( String, DataType a ))
+    | CustomTypeData String (List (DataType a))
 
 
 dataTypeToString dataType =
@@ -30,7 +31,10 @@ dataTypeToString dataType =
             "[" ++ String.join "," (List.map dataTypeToString value) ++ "]"
 
         RecordData list ->
-            "Record [" ++ String.join "," (List.map fieldDataTypeToString list) ++ "]"
+            "{" ++ String.join "," (List.map fieldDataTypeToString list) ++ "}"
+
+        CustomTypeData name list ->
+            name ++ " " ++ String.join " " (List.map dataTypeToString list)
 
 
 fieldDataTypeToString : ( String, DataType a ) -> String
@@ -49,6 +53,11 @@ type Comparison a
     | TupleDiff (List (Comparison a))
     | ListDiff (List (Comparison a))
     | RecordDiff (List ( String, Comparison a ))
+    | CustomTypeNameDiff
+        { expected : { name : String, data : List (DataType a) }
+        , actual : { name : String, data : List (DataType a) }
+        }
+    | CustomTypeContentsDiff String (List (Comparison a))
 
 
 isDiff : Comparison a -> Bool
@@ -94,6 +103,14 @@ diffToString diff_ =
         RecordDiff list ->
             String.join "\n" (List.map fieldDiffToString list)
 
+        CustomTypeNameDiff { expected, actual } ->
+            ("-" ++ expected.name ++ " " ++ (String.join "\n" <| List.map dataTypeToString expected.data))
+                ++ "\n"
+                ++ (" +" ++ actual.name ++ " " ++ (String.join "\n" <| List.map dataTypeToString actual.data))
+
+        CustomTypeContentsDiff name diffs ->
+            name ++ " " ++ String.join "\n" (List.map diffToString diffs)
+
 
 fieldDiffToString : ( String, Comparison a ) -> String
 fieldDiffToString ( name, diff_ ) =
@@ -124,6 +141,9 @@ diff expected actual =
 
             ( RecordData e, RecordData a ) ->
                 diffRecords e a
+
+            ( CustomTypeData eName e, CustomTypeData aName a ) ->
+                diffCustomTypes ( eName, e ) ( aName, a )
 
             _ ->
                 Error "Comparing different data types"
@@ -203,14 +223,23 @@ diffField ( eName, e ) ( _, a ) =
     ( eName, diff e a )
 
 
+diffCustomTypes : ( String, List (DataType a) ) -> ( String, List (DataType a) ) -> Comparison a
+diffCustomTypes ( eName, e ) ( aName, a ) =
+    if eName /= aName then
+        CustomTypeNameDiff { expected = { name = eName, data = e }, actual = { name = aName, data = a } }
+
+    else
+        CustomTypeContentsDiff eName <| List.map2 diff e a
+
+
 main : Html msg
 main =
     let
         a =
-            RecordData [ ( "name", IntData 1 ), ( "other", FloatData 2.0 ) ]
+            CustomTypeData "Bob" [ IntData 1, FloatData 2.0 ]
 
         b =
-            RecordData [ ( "name", IntData 1 ), ( "other", FloatData 2.5 ) ]
+            CustomTypeData "Bob" [ IntData 1, FloatData 2.5 ]
     in
     div []
         [ text "Result: "
